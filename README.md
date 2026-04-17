@@ -7,7 +7,10 @@ A minimal, premium-feeling focus timer for iOS. Dark-first UI, gentle ambient mo
 - **Single-screen focus timer** (SwiftUI + MVVM)
 - **Ambient background** tuned for calm motion (slow drift, low contrast)
 - **Skippable onboarding** (3 pages max) shown only on first launch
-- **Ambient audio (v1)**: one control cycles **Off → Rain → Café → Soft chatter → Off**
+- **Ambient audio (v1)**:
+  - A **3-option strip** for **Rain / Café / Chatter** (always visible)
+  - A **top-right cycle button** still cycles **Off → Rain → Café → Chatter → Off**
+  - **Haptics + a tiny toast** confirm each change (minimal, no menus)
 - **Completion overlay** for a clean “session complete” moment
 
 ## Requirements

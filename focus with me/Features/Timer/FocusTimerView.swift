@@ -22,6 +22,10 @@ struct FocusTimerView: View {
             VStack(spacing: 32) {
                 PresenceView(presenceCount: viewModel.presenceCount)
 
+                AmbientSoundOptionsRow(selectedSound: $viewModel.selectedSound) { sound in
+                    viewModel.selectAmbientSound(sound)
+                }
+
                 Spacer(minLength: 0)
 
                 Text(formattedTime)
@@ -58,6 +62,23 @@ struct FocusTimerView: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
+        }
+        .overlay(alignment: .top) {
+            if let toast = viewModel.ambientToast {
+                Text(toast)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+                    .padding(.top, 96)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .animation(.easeInOut(duration: 0.2), value: toast)
+            }
         }
         .safeAreaInset(edge: .top) {
             HStack {

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AVFoundation
+import UIKit
 
 enum AmbientSound: CaseIterable, Equatable {
     case off
@@ -18,12 +19,8 @@ final class FocusTimerViewModel: ObservableObject {
     @Published var selectedDuration: Int = 1500
     @Published var sessionCompleted: Bool = false
     @Published var presenceCount: Int = 2431
-    @Published var selectedSound: AmbientSound = .off {
-        didSet {
-            guard !isApplyingAmbientSoundProgrammatically else { return }
-            applyAmbientSoundChange(from: oldValue, to: selectedSound)
-        }
-    }
+    @Published var selectedSound: AmbientSound = .off
+    @Published var ambientToast: String?
 
     // MARK: - Private
 
@@ -31,7 +28,7 @@ final class FocusTimerViewModel: ObservableObject {
     private var presenceCancellable: AnyCancellable?
     private var ambientPlayers: [AmbientSound: AVAudioPlayer] = [:]
     private var activeAmbientPlayer: AVAudioPlayer?
-    private var isApplyingAmbientSoundProgrammatically = false
+    private var ambientToastWorkItem: DispatchWorkItem?
 
     // MARK: - Init
 
@@ -93,7 +90,12 @@ final class FocusTimerViewModel: ObservableObject {
     func cycleAmbientSound() {
         let all = AmbientSound.allCases
         guard let index = all.firstIndex(of: selectedSound) else { return }
-        selectedSound = all[(index + 1) % all.count]
+        let next = all[(index + 1) % all.count]
+        updateSelectedSound(next, emitUserFeedback: true)
+    }
+
+    func selectAmbientSound(_ sound: AmbientSound) {
+        updateSelectedSound(sound, emitUserFeedback: true)
     }
 
     private func configureAudioSessionIfNeeded() {
@@ -125,9 +127,25 @@ final class FocusTimerViewModel: ObservableObject {
         }
     }
 
-    private func applyAmbientSoundChange(from oldValue: AmbientSound, to newValue: AmbientSound) {
+    private func updateSelectedSound(_ newValue: AmbientSound, emitUserFeedback: Bool) {
+        let oldValue = selectedSound
         guard oldValue != newValue else { return }
 
+        selectedSound = newValue
+        applyAmbientAudio(for: newValue)
+
+        guard emitUserFeedback else { return }
+
+        if newValue == .off {
+            HapticsManager.success()
+        } else {
+            HapticsManager.impactLight()
+        }
+
+        presentAmbientToast(for: newValue)
+    }
+
+    private func applyAmbientAudio(for newValue: AmbientSound) {
         activeAmbientPlayer?.stop()
         activeAmbientPlayer = nil
 
@@ -139,7 +157,7 @@ final class FocusTimerViewModel: ObservableObject {
         activateAudioSessionIfNeeded()
 
         guard let player = ambientPlayers[newValue] else {
-            setSelectedSoundProgrammatically(.off)
+            setSelectedSoundProgrammatically(.off, reason: "Missing audio file")
             return
         }
 
@@ -149,7 +167,7 @@ final class FocusTimerViewModel: ObservableObject {
         if player.play() {
             activeAmbientPlayer = player
         } else {
-            setSelectedSoundProgrammatically(.off)
+            setSelectedSoundProgrammatically(.off, reason: "Couldn’t start audio")
         }
     }
 
@@ -165,11 +183,20 @@ final class FocusTimerViewModel: ObservableObject {
         deactivateAudioSessionIfPossible()
     }
 
-    private func setSelectedSoundProgrammatically(_ sound: AmbientSound) {
+    private func setSelectedSoundProgrammatically(_ sound: AmbientSound, reason: String? = nil) {
         guard selectedSound != sound else { return }
-        isApplyingAmbientSoundProgrammatically = true
         selectedSound = sound
-        isApplyingAmbientSoundProgrammatically = false
+        applyAmbientAudio(for: sound)
+
+        if let reason {
+            ambientToast = reason
+            ambientToastWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.ambientToast = nil
+            }
+            ambientToastWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.85, execute: workItem)
+        }
     }
 
     private func bundleURL(for sound: AmbientSound) -> URL? {
@@ -182,6 +209,31 @@ final class FocusTimerViewModel: ObservableObject {
         }
 
         return nil
+    }
+
+    private func presentAmbientToast(for sound: AmbientSound) {
+        ambientToastWorkItem?.cancel()
+
+        let message: String?
+        switch sound {
+        case .off:
+            message = "Sound off"
+        case .rain:
+            message = "Rain"
+        case .cafe:
+            message = "Café"
+        case .whiteNoise:
+            message = "Chatter"
+        }
+
+        ambientToast = message
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.ambientToast = nil
+        }
+
+        ambientToastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85, execute: workItem)
     }
 
     private func activateAudioSessionIfNeeded() {
