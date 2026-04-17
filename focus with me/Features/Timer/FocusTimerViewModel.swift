@@ -108,23 +108,7 @@ final class FocusTimerViewModel: ObservableObject {
     }
 
     private func preloadAmbientPlayersIfNeeded() {
-        guard ambientPlayers.isEmpty else { return }
-
-        for sound in AmbientSound.allCases where sound != .off {
-            guard let url = bundleURL(for: sound) else {
-                continue
-            }
-
-            do {
-                let player = try AVAudioPlayer(contentsOf: url)
-                player.numberOfLoops = -1
-                player.volume = sound.defaultVolume
-                player.prepareToPlay()
-                ambientPlayers[sound] = player
-            } catch {
-                continue
-            }
-        }
+        // Players are created lazily on first selection to avoid brittle "preload everything" failures.
     }
 
     private func updateSelectedSound(_ newValue: AmbientSound, emitUserFeedback: Bool) {
@@ -132,9 +116,11 @@ final class FocusTimerViewModel: ObservableObject {
         guard oldValue != newValue else { return }
 
         selectedSound = newValue
-        applyAmbientAudio(for: newValue)
 
-        guard emitUserFeedback else { return }
+        guard emitUserFeedback else {
+            applyAmbientAudio(for: newValue)
+            return
+        }
 
         if newValue == .off {
             HapticsManager.success()
@@ -143,6 +129,7 @@ final class FocusTimerViewModel: ObservableObject {
         }
 
         presentAmbientToast(for: newValue)
+        applyAmbientAudio(for: newValue)
     }
 
     private func applyAmbientAudio(for newValue: AmbientSound) {
@@ -156,7 +143,8 @@ final class FocusTimerViewModel: ObservableObject {
 
         activateAudioSessionIfNeeded()
 
-        guard let player = ambientPlayers[newValue] else {
+        let player = player(for: newValue)
+        guard let player else {
             setSelectedSoundProgrammatically(.off, reason: "Missing audio file")
             return
         }
@@ -200,15 +188,49 @@ final class FocusTimerViewModel: ObservableObject {
     }
 
     private func bundleURL(for sound: AmbientSound) -> URL? {
-        let subdirectory = "Resources/Ambient"
+        let name = sound.resourceName
 
         for ext in sound.preferredBundleExtensions {
-            if let url = Bundle.main.url(forResource: sound.resourceName, withExtension: ext, subdirectory: subdirectory) {
+            // Try common Xcode packaging shapes (folder reference, flattening, synchronized groups).
+            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Resources/Ambient") {
+                return url
+            }
+
+            if let url = Bundle.main.url(forResource: "\(name).\(ext)", withExtension: nil, subdirectory: "Resources/Ambient") {
+                return url
+            }
+
+            if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+                return url
+            }
+
+            if let url = Bundle.main.url(forResource: "\(name).\(ext)", withExtension: nil) {
                 return url
             }
         }
 
         return nil
+    }
+
+    private func player(for sound: AmbientSound) -> AVAudioPlayer? {
+        if let existing = ambientPlayers[sound] {
+            return existing
+        }
+
+        guard let url = bundleURL(for: sound) else {
+            return nil
+        }
+
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.numberOfLoops = -1
+            player.volume = sound.defaultVolume
+            player.prepareToPlay()
+            ambientPlayers[sound] = player
+            return player
+        } catch {
+            return nil
+        }
     }
 
     private func presentAmbientToast(for sound: AmbientSound) {
@@ -320,11 +342,11 @@ private extension AmbientSound {
         case .off:
             return 0
         case .rain:
-            return 0.35
+            return 0.65
         case .cafe:
-            return 0.30
+            return 0.60
         case .whiteNoise:
-            return 0.28
+            return 0.55
         }
     }
 }
