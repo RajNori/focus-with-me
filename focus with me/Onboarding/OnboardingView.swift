@@ -10,16 +10,6 @@ struct OnboardingView: View {
             AmbientView()
 
             VStack {
-                HStack {
-                    Spacer()
-                    Button("Skip") {
-                        hasCompletedOnboarding = true
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding()
-                }
-
                 TabView(selection: $currentPage) {
                     ForEach(Array(OnboardingPageModel.pages.enumerated()), id: \.offset) { index, page in
                         OnboardingPageView(page: page)
@@ -60,6 +50,20 @@ struct OnboardingView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 32)
             }
+        }
+        .safeAreaInset(edge: .top) {
+            HStack {
+                Spacer()
+                Button("Skip") {
+                    hasCompletedOnboarding = true
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.7))
+                .fixedSize(horizontal: true, vertical: true)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
     }
 
