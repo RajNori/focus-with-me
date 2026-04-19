@@ -70,6 +70,14 @@ final class FocusTimerViewModel: ObservableObject {
         isRunning = false
     }
 
+    func endSession() {
+        timerCancellable?.cancel()
+        isRunning = false
+        sessionCompleted = false
+        timeRemaining = selectedDuration
+        updateSelectedSound(.off, emitUserFeedback: false)
+    }
+
     func reset() {
         timerCancellable?.cancel()
         isRunning = false
